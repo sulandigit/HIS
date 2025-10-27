@@ -1,0 +1,125 @@
+# HIS日志管理配置示例
+
+# ============= 日志管理配置 =============
+his:
+  logging:
+    # 是否启用请求日志
+    enable-request-log: true
+    # 是否启用性能日志
+    enable-performance-log: true
+    # 是否启用SQL日志
+    enable-sql-log: true
+    # 是否启用异常日志
+    enable-exception-log: true
+    # 是否对敏感信息进行脱敏
+    enable-desensitization: true
+    # 慢接口阈值(毫秒)
+    slow-api-threshold: 3000
+    # 慢SQL阈值(毫秒)
+    slow-sql-threshold: 1000
+    # 日志保留天数
+    retention-days: 30
+    # 单个日志文件最大大小
+    max-file-size: 100MB
+    # 日志总大小上限
+    total-size-cap: 10GB
+    # 是否启用异步日志
+    enable-async-log: true
+    # 异步日志队列大小
+    async-queue-size: 512
+    # 是否输出到ELK
+    enable-elk: false
+    # Logstash地址
+    logstash-host: localhost:4560
+
+# ============= Spring Boot日志配置 =============
+logging:
+  level:
+    root: INFO
+    com.neu.his: DEBUG
+    # MyBatis SQL日志
+    com.neu.his.mbg.mapper: DEBUG
+    # Spring框架日志
+    org.springframework: INFO
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    # Hibernate日志(如果使用)
+    org.hibernate: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  # 日志文件路径(可选,如果不配置,使用logback-spring.xml中的默认配置)
+  # file:
+  #   path: /var/logs/his
+  #   name: his.log
+
+# ============= 生产环境配置建议 =============
+---
+spring:
+  profiles: prod
+
+his:
+  logging:
+    enable-request-log: true
+    enable-performance-log: true
+    enable-sql-log: false  # 生产环境关闭SQL详细日志
+    enable-exception-log: true
+    enable-desensitization: true
+    slow-api-threshold: 2000
+    slow-sql-threshold: 500
+    retention-days: 90  # 生产环境保留更长时间
+    enable-async-log: true
+    enable-elk: true  # 生产环境建议启用ELK
+    logstash-host: logstash.production.com:4560
+
+logging:
+  level:
+    root: WARN
+    com.neu.his: INFO  # 生产环境降低日志级别
+    com.neu.his.mbg.mapper: INFO
+
+# ============= 开发环境配置建议 =============
+---
+spring:
+  profiles: dev
+
+his:
+  logging:
+    enable-request-log: true
+    enable-performance-log: true
+    enable-sql-log: true
+    enable-exception-log: true
+    enable-desensitization: false  # 开发环境可以不脱敏,便于调试
+    slow-api-threshold: 5000
+    slow-sql-threshold: 2000
+    retention-days: 7
+    enable-async-log: false  # 开发环境关闭异步,便于实时查看
+    enable-elk: false
+
+logging:
+  level:
+    root: INFO
+    com.neu.his: DEBUG
+    com.neu.his.mbg.mapper: DEBUG
+
+# ============= 测试环境配置建议 =============
+---
+spring:
+  profiles: test
+
+his:
+  logging:
+    enable-request-log: true
+    enable-performance-log: true
+    enable-sql-log: true
+    enable-exception-log: true
+    enable-desensitization: true
+    slow-api-threshold: 3000
+    slow-sql-threshold: 1000
+    retention-days: 30
+    enable-async-log: true
+    enable-elk: false
+
+logging:
+  level:
+    root: INFO
+    com.neu.his: DEBUG
