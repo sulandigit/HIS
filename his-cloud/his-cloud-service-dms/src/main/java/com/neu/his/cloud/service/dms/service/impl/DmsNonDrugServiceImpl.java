@@ -1,4 +1,5 @@
 package com.neu.his.cloud.service.dms.service.impl;
+import com.neu.his.cloud.service.dms.constant.RedisKeyConstants;
 import com.neu.his.cloud.service.dms.dto.dms.DmsNonDrugParam;
 import com.neu.his.cloud.service.dms.dto.dms.DmsNonDrugResult;
 import com.neu.his.cloud.service.dms.mapper.DmsNonDrugMapper;
@@ -7,6 +8,8 @@ import com.neu.his.cloud.service.dms.model.DmsNonDrug;
 import com.neu.his.cloud.service.dms.model.DmsNonDrugExample;
 import com.neu.his.cloud.service.dms.service.DmsNonDrugService;
 import com.neu.his.cloud.service.dms.util.RedisUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -16,9 +19,13 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class DmsNonDrugServiceImpl implements DmsNonDrugService {
+
+    private static final Logger logger = LoggerFactory.getLogger(DmsNonDrugServiceImpl.class);
+
     @Autowired
     private DmsNonDrugMapper dmsNonDrugMapper;
 
@@ -32,6 +39,7 @@ public class DmsNonDrugServiceImpl implements DmsNonDrugService {
      * <p>author:王思阳
      * <p>author:赵煜     封装param中没有的数据
      * <p>author:赵煜     修复科室名字错误bug
+     * <p>优化: 采用Cache Aside模式，插入成功后直接删除缓存
      */
     @Override
     public int create(DmsNonDrugParam dmsNonDrugParam) {
@@ -46,13 +54,15 @@ public class DmsNonDrugServiceImpl implements DmsNonDrugService {
         BeanUtils.copyProperties(dmsNonDrugParam, dmsNonDrug);
         dmsNonDrug.setStatus(1);  // 正常
         dmsNonDrug.setCreateDate(new Date());
-        dmsNonDrugMapper.insertSelective(dmsNonDrug);
+        int result = dmsNonDrugMapper.insertSelective(dmsNonDrug);
 
-        //插入成功，在redis修改flag
-        redisUtil.setObj("nonDrugChangeStatus","1");
+        //插入成功，删除缓存以触发重建
+        if (result > 0) {
+            redisUtil.delete(RedisKeyConstants.NonDrug.ALL);
+            logger.info("非药品新增成功，已删除缓存: {}", RedisKeyConstants.NonDrug.ALL);
+        }
 
-        return 1;
-
+        return result;
     }
 
     @Override
@@ -68,8 +78,11 @@ public class DmsNonDrugServiceImpl implements DmsNonDrugService {
             }
         }
 
-        //删除成功，在redis修改flag
-        redisUtil.setObj("nonDrugChangeStatus","1");
+        //删除成功，删除缓存以触发重建
+        if (count > 0) {
+            redisUtil.delete(RedisKeyConstants.NonDrug.ALL);
+            logger.info("非药品删除成功，已删除缓存: {}", RedisKeyConstants.NonDrug.ALL);
+        }
 
         return count;
     }
@@ -82,10 +95,15 @@ public class DmsNonDrugServiceImpl implements DmsNonDrugService {
         DmsNonDrugExample example = new DmsNonDrugExample();
         example.createCriteria().andIdEqualTo(id);
 
-        //更新成功，在redis修改flag
-        redisUtil.setObj("nonDrugChangeStatus","1");
-
-        return dmsNonDrugMapper.updateByExampleSelective(dmsNonDrug,example);
+        int result = dmsNonDrugMapper.updateByExampleSelective(dmsNonDrug,example);
+        
+        //更新成功，删除缓存以触发重建
+        if (result > 0) {
+            redisUtil.delete(RedisKeyConstants.NonDrug.ALL);
+            logger.info("非药品更新成功，已删除缓存: {}", RedisKeyConstants.NonDrug.ALL);
+        }
+        
+        return result;
     }
 
 
@@ -140,16 +158,15 @@ public class DmsNonDrugServiceImpl implements DmsNonDrugService {
 
     @Override
     public List<DmsNonDrugResult> selectAll() {
-        //先在redis中查询是否存在
-        String status = (String)redisUtil.getObj("nonDrugChangeStatus");
-        if(status != null && status.equals("0")){
-            List<DmsNonDrugResult> resultList = (List<DmsNonDrugResult>)redisUtil.getObj("allNonDrug");
-            if(resultList != null){
-                return resultList;
-            }
+        //先从redis中查询
+        List<DmsNonDrugResult> resultList = (List<DmsNonDrugResult>)redisUtil.getObj(RedisKeyConstants.NonDrug.ALL);
+        if(resultList != null && !resultList.isEmpty()){
+            logger.info("从Redis缓存中获取全部非药品数据，key: {}", RedisKeyConstants.NonDrug.ALL);
+            return resultList;
         }
-        //在数据库中查找
 
+        logger.info("缓存未命中，从数据库查询全部非药品数据");
+        //缓存未命中，从数据库查找
         List<DmsNonDrugResult> list = new ArrayList<>();
         DmsNonDrugExample example = new DmsNonDrugExample();
         example.createCriteria().andStatusNotEqualTo(0);
@@ -159,10 +176,13 @@ public class DmsNonDrugServiceImpl implements DmsNonDrugService {
             list.add(dmsNonDrugResult);
         }
 
-        //向redis添加
-        redisUtil.setObj("allNonDrug",list);
-        redisUtil.setObj("nonDrugChangeStatus","0");
-
+        //写入缓存，设置2小时过期时间
+        if (!list.isEmpty()) {
+            redisUtil.setObj(RedisKeyConstants.NonDrug.ALL, list, 
+                RedisKeyConstants.ExpireTime.BUSINESS_DATA, TimeUnit.SECONDS);
+            logger.info("已将非药品数据写入缓存，key: {}, 过期时间: {}秒", 
+                RedisKeyConstants.NonDrug.ALL, RedisKeyConstants.ExpireTime.BUSINESS_DATA);
+        }
 
         return list;
     }

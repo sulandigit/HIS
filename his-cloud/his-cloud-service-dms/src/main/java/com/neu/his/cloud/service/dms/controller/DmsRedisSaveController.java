@@ -2,6 +2,7 @@ package com.neu.his.cloud.service.dms.controller;
 
 
 import com.neu.his.cloud.service.dms.common.CommonResult;
+import com.neu.his.cloud.service.dms.constant.RedisKeyConstants;
 import com.neu.his.cloud.service.dms.dto.dms.DmsCaseHistoryParam;
 import com.neu.his.cloud.service.dms.dto.dms.DmsDrugRedisParam;
 import com.neu.his.cloud.service.dms.dto.dms.DmsNonDrugRedisParam;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Controller
 @Api(tags = "DmsRedisSaveController", description = "redis暂存管理")
@@ -22,8 +24,6 @@ import java.util.List;
 @CrossOrigin(allowCredentials = "true")
 public class DmsRedisSaveController {
     private static Logger LOGGER = LoggerFactory.getLogger(DmsRedisSaveController.class);
-
-    private static Long outOfTime = new Long(60 * 30);//单位为秒
 
     @Autowired
     private RedisUtil redisUtil;
@@ -33,9 +33,10 @@ public class DmsRedisSaveController {
     @ResponseBody
     public CommonResult saveCasePage(@RequestBody DmsCaseHistoryParam dmsCaseHistoryParam,
                                      @RequestParam("registrationId") Long registrationId){
-        redisUtil.setObj("1" + registrationId.toString(),dmsCaseHistoryParam);
-        redisUtil.expireStr("1" + registrationId.toString(),outOfTime);
-        LOGGER.info("redis暂存成功：" + dmsCaseHistoryParam.toString());
+        String cacheKey = RedisKeyConstants.CaseDraft.getKey(registrationId);
+        redisUtil.setObj(cacheKey, dmsCaseHistoryParam, 
+            RedisKeyConstants.ExpireTime.TEMP_DRAFT, TimeUnit.SECONDS);
+        LOGGER.info("redis暂存成功，key: {}, data: {}", cacheKey, dmsCaseHistoryParam.toString());
         return CommonResult.success("暂存成功");
     }
 
@@ -43,12 +44,13 @@ public class DmsRedisSaveController {
     @RequestMapping(value = "/getCasePage", method = RequestMethod.POST)
     @ResponseBody
     public CommonResult<DmsCaseHistoryParam> getCasePage(@RequestParam("registrationId") Long registrationId){
-        DmsCaseHistoryParam param = (DmsCaseHistoryParam)redisUtil.getObj("1" + registrationId.toString());
+        String cacheKey = RedisKeyConstants.CaseDraft.getKey(registrationId);
+        DmsCaseHistoryParam param = (DmsCaseHistoryParam)redisUtil.getObj(cacheKey);
         if(param == null){
-            LOGGER.info("redis取出失败");
+            LOGGER.info("redis取出失败，key: {}", cacheKey);
             return CommonResult.success(null);
         }
-        LOGGER.info("redis取出成功：" + param.toString());
+        LOGGER.info("redis取出成功，key: {}, data: {}", cacheKey, param.toString());
         return CommonResult.success(param);
     }
 
@@ -60,9 +62,10 @@ public class DmsRedisSaveController {
     public CommonResult saveDrugPrescription(@RequestBody List<DmsDrugRedisParam> dmsDrugRedisParam,
                                              @RequestParam("registrationId") Long registrationId,
                                              @RequestParam("type") int type){
-        redisUtil.setObj(type + registrationId.toString(),dmsDrugRedisParam);
-        redisUtil.expireStr(type + registrationId.toString(),outOfTime);
-        LOGGER.info("redis暂存成功：" + dmsDrugRedisParam.toString());
+        String cacheKey = RedisKeyConstants.Prescription.getKey(registrationId, type);
+        redisUtil.setObj(cacheKey, dmsDrugRedisParam, 
+            RedisKeyConstants.ExpireTime.TEMP_DRAFT, TimeUnit.SECONDS);
+        LOGGER.info("redis暂存成功，key: {}, data: {}", cacheKey, dmsDrugRedisParam.toString());
         return CommonResult.success("暂存成功");
     }
 
@@ -71,12 +74,13 @@ public class DmsRedisSaveController {
     @ResponseBody
     public CommonResult<List<DmsDrugRedisParam>> getDrugPrescription(@RequestParam("registrationId") Long registrationId,
                                                                      @RequestParam("type") int type){
-        List<DmsDrugRedisParam> paramList = (List<DmsDrugRedisParam>)redisUtil.getObj(type + registrationId.toString());
+        String cacheKey = RedisKeyConstants.Prescription.getKey(registrationId, type);
+        List<DmsDrugRedisParam> paramList = (List<DmsDrugRedisParam>)redisUtil.getObj(cacheKey);
         if(paramList == null){
-            LOGGER.info("redis取出失败");
+            LOGGER.info("redis取出失败，key: {}", cacheKey);
             return CommonResult.success(null);
         }
-        LOGGER.info("redis取出成功：" + paramList.toString());
+        LOGGER.info("redis取出成功，key: {}, data: {}", cacheKey, paramList.toString());
         return CommonResult.success(paramList);
     }
 
@@ -89,9 +93,10 @@ public class DmsRedisSaveController {
     public CommonResult saveNonDrug(@RequestBody DmsNonDrugRedisParam dmsNonDrugRedisParam,
                                     @RequestParam("registrationId") Long registrationId,
                                     @RequestParam("type") int type){
-        redisUtil.setObj(type + registrationId.toString(),dmsNonDrugRedisParam);
-        redisUtil.expireStr(type + registrationId.toString(),outOfTime);
-        LOGGER.info("redis暂存成功：" + dmsNonDrugRedisParam.toString());
+        String cacheKey = RedisKeyConstants.NonDrugTemp.getKey(registrationId, type);
+        redisUtil.setObj(cacheKey, dmsNonDrugRedisParam, 
+            RedisKeyConstants.ExpireTime.TEMP_DRAFT, TimeUnit.SECONDS);
+        LOGGER.info("redis暂存成功，key: {}, data: {}", cacheKey, dmsNonDrugRedisParam.toString());
         return CommonResult.success("暂存成功");
     }
 
@@ -100,12 +105,13 @@ public class DmsRedisSaveController {
     @ResponseBody
     public CommonResult<DmsNonDrugRedisParam> getNonDrug(@RequestParam("registrationId") Long registrationId,
                                                          @RequestParam("type") int type){
-        DmsNonDrugRedisParam paramList = (DmsNonDrugRedisParam)redisUtil.getObj(type + registrationId.toString());
+        String cacheKey = RedisKeyConstants.NonDrugTemp.getKey(registrationId, type);
+        DmsNonDrugRedisParam paramList = (DmsNonDrugRedisParam)redisUtil.getObj(cacheKey);
         if(paramList == null){
-            LOGGER.info("redis取出失败");
+            LOGGER.info("redis取出失败，key: {}", cacheKey);
             return CommonResult.success(null);
         }
-        LOGGER.info("redis取出成功：" + paramList.toString());
+        LOGGER.info("redis取出成功，key: {}, data: {}", cacheKey, paramList.toString());
         return CommonResult.success(paramList);
     }
 }
