@@ -3,6 +3,7 @@ package com.neu.his.cloud.service.sms.service.impl;
 
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
+import com.neu.his.cloud.service.sms.constant.RedisKeyConstants;
 import com.neu.his.cloud.service.sms.dto.sms.SmsDeptParam;
 import com.neu.his.cloud.service.sms.dto.sms.SmsDeptResult;
 import com.neu.his.cloud.service.sms.mapper.SmsDeptMapper;
@@ -10,6 +11,8 @@ import com.neu.his.cloud.service.sms.model.SmsDept;
 import com.neu.his.cloud.service.sms.model.SmsDeptExample;
 import com.neu.his.cloud.service.sms.service.SmsDeptService;
 import com.neu.his.cloud.service.sms.util.RedisUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -17,12 +20,15 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  *  科室
  */
 @Service
 public class SmsDeptServiceImpl implements SmsDeptService {
+
+    private static final Logger logger = LoggerFactory.getLogger(SmsDeptServiceImpl.class);
 
     @Autowired
     private SmsDeptMapper smsDeptMapper;
@@ -34,6 +40,7 @@ public class SmsDeptServiceImpl implements SmsDeptService {
      * 2.2.如果存在则返回值0
      * <p>author: ma
      * <p>author: 赵煜 修改科室新增的问题（不能新增同名科室）
+     * <p>优化: 采用Cache Aside模式，插入成功后直接删除缓存
      */
     @Override
     public int create(SmsDeptParam smsDeptParam){
@@ -48,11 +55,16 @@ public class SmsDeptServiceImpl implements SmsDeptService {
             return 0;
         }
 
-        //插入成功，在redis修改flag
-        redisUtil.setObj("deptChangeStatus","1");
-
         //没有则插入数据
-        return smsDeptMapper.insert(smsDept);
+        int result = smsDeptMapper.insert(smsDept);
+        
+        //插入成功，删除缓存以触发重建
+        if (result > 0) {
+            redisUtil.delete(RedisKeyConstants.Dept.ALL);
+            logger.info("科室新增成功，已删除缓存: {}", RedisKeyConstants.Dept.ALL);
+        }
+        
+        return result;
     }
 
     @Override
@@ -62,10 +74,15 @@ public class SmsDeptServiceImpl implements SmsDeptService {
         SmsDeptExample example = new SmsDeptExample();
         example.createCriteria().andIdIn(ids);
 
-        //删除成功，在redis修改flag
-        redisUtil.setObj("deptChangeStatus","1");
-
-        return smsDeptMapper.updateByExampleSelective(smsDept, example);
+        int result = smsDeptMapper.updateByExampleSelective(smsDept, example);
+        
+        //删除成功，删除缓存以触发重建
+        if (result > 0) {
+            redisUtil.delete(RedisKeyConstants.Dept.ALL);
+            logger.info("科室删除成功，已删除缓存: {}", RedisKeyConstants.Dept.ALL);
+        }
+        
+        return result;
     }
 
     @Override
@@ -74,10 +91,15 @@ public class SmsDeptServiceImpl implements SmsDeptService {
         BeanUtils.copyProperties(smsDeptParam, smsDept);
         smsDept.setId(id);
 
-        //修改成功，在redis修改flag
-        redisUtil.setObj("deptChangeStatus","1");
-
-        return smsDeptMapper.updateByPrimaryKeySelective(smsDept);
+        int result = smsDeptMapper.updateByPrimaryKeySelective(smsDept);
+        
+        //修改成功，删除缓存以触发重建
+        if (result > 0) {
+            redisUtil.delete(RedisKeyConstants.Dept.ALL);
+            logger.info("科室更新成功，已删除缓存: {}", RedisKeyConstants.Dept.ALL);
+        }
+        
+        return result;
     }
 
     @Override
@@ -116,22 +138,17 @@ public class SmsDeptServiceImpl implements SmsDeptService {
 
     @Override
     public List<SmsDeptResult> selectAll(){
-        //先在redis中查询是否存在
-        String status = (String)redisUtil.getObj("deptChangeStatus");
-        if(status != null && status.equals("0")){
-            List<SmsDeptResult> resultList = (List<SmsDeptResult>)redisUtil.getObj("allDept");
-            if(resultList != null){
-                System.err.println("从redis中取出全部科室数据");
-                return resultList;
-            }
-        }else{
-            System.err.println("从mysql中取出全部科室数据");
+        //先从redis中查询
+        List<SmsDeptResult> resultList = (List<SmsDeptResult>)redisUtil.getObj(RedisKeyConstants.Dept.ALL);
+        if(resultList != null && !resultList.isEmpty()){
+            logger.info("从Redis缓存中获取全部科室数据，key: {}", RedisKeyConstants.Dept.ALL);
+            return resultList;
         }
 
-        //数据库查询
+        logger.info("缓存未命中，从数据库查询全部科室数据");
+        //缓存未命中，从数据库查询
         SmsDeptExample example = new SmsDeptExample();
         example.createCriteria().andStatusNotEqualTo(0);
-        //返回数据包装成Result
         List<SmsDept> smsDepts = smsDeptMapper.selectByExample(example);
         List<SmsDeptResult> smsDeptResults = new ArrayList<>();
         for (SmsDept s : smsDepts) {
@@ -140,10 +157,13 @@ public class SmsDeptServiceImpl implements SmsDeptService {
             smsDeptResults.add(r);
         }
 
-        //向redis添加
-        redisUtil.setObj("allDept",smsDeptResults);
-        redisUtil.setObj("deptChangeStatus","0");
-
+        //写入缓存，设置24小时过期时间
+        if (!smsDeptResults.isEmpty()) {
+            redisUtil.setObj(RedisKeyConstants.Dept.ALL, smsDeptResults, 
+                RedisKeyConstants.ExpireTime.BASE_DATA, TimeUnit.SECONDS);
+            logger.info("已将科室数据写入缓存，key: {}, 过期时间: {}秒", 
+                RedisKeyConstants.Dept.ALL, RedisKeyConstants.ExpireTime.BASE_DATA);
+        }
 
         return smsDeptResults;
     }
