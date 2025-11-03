@@ -84,6 +84,17 @@
             <artifactId>aliyun-sdk-oss</artifactId>
             <version>2.5.0</version>
         </dependency>
+        <!-- Caffeine本地缓存 -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+            <version>2.9.3</version>
+        </dependency>
+        <!-- Spring AOP支持 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
 
     </dependencies>
 
