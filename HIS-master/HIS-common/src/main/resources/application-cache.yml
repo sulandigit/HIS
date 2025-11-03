@@ -1,0 +1,30 @@
+# 多级缓存配置示例
+his:
+  cache:
+    # Caffeine本地缓存配置
+    caffeine:
+      # 初始容量
+      initial-capacity: 100
+      # 最大容量
+      maximum-size: 1000
+      # 写入后过期时间(秒)
+      expire-after-write: 300
+      # 访问后过期时间(秒)
+      expire-after-access: 180
+      # 是否启用统计
+      record-stats: true
+
+# Redis配置(如果需要)
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    password:
+    database: 0
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-wait: -1ms
+        max-idle: 8
+        min-idle: 0
