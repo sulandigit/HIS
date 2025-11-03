@@ -10,6 +10,7 @@ import com.neu.his.mbg.model.*;
 import com.sun.org.apache.bcel.internal.generic.IF_ACMPEQ;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -323,6 +324,7 @@ public class BmsFeeServiceImpl implements BmsFeeService {
     //2.根据挂号id查出账单记录，并关联项目（更新串）
     //4.插入发票
     @Override
+    @Transactional(timeout = 30, rollbackFor = Exception.class)
     public int charge(List<BmsChargeParam> bmsChargeParamList) {
         if (bmsChargeParamList.isEmpty()){
             return 0;
@@ -574,6 +576,7 @@ public class BmsFeeServiceImpl implements BmsFeeService {
     //4.新增一条冲红发票记录（金额为原发票总钱负值，与原发票关联），原发票状态改为3
     //5.插入新发票（重新拼串，并更新amount为原amount总退款金额）
     @Override
+    @Transactional(timeout = 30, rollbackFor = Exception.class)
     public int refundCharge(List<BmsRefundChargeParam> bmsRefundChargeParamList) {
         if (!bmsRefundChargeParamList.isEmpty()){
             BigDecimal totalRefundAmount = new BigDecimal(0);//存要退的总金额
@@ -757,6 +760,7 @@ public class BmsFeeServiceImpl implements BmsFeeService {
     //3.新增一条冲红发票记录（原发票amount负值，与原发票关联）,把状态改为3（被冲红）
     //5.根据挂号id，判断是否为专家号，如果为专家号，则修改skd,相关医生的限额+1
     @Override
+    @Transactional(timeout = 20, rollbackFor = Exception.class)
     public int refundRegistrationCharge(BmsRefundRegChargeParam bmsRefundRegChargeParam) {
         DmsRegistration dmsRegistration = dmsRegistrationMapper.selectByPrimaryKey(bmsRefundRegChargeParam.getRegistrationId());
         if (dmsRegistration.getStatus() == 1){//1（待诊）

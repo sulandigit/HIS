@@ -1,6 +1,11 @@
 spring:
   profiles:
     active: dev #默认为开发环境
+  
+  # 事务配置
+  transaction:
+    default-timeout: 30  # 默认事务超时时间(秒)
+    rollback-on-commit-failure: true  # 提交失败时回滚
 
 #  rabbitmq:
 #    host: localhost
