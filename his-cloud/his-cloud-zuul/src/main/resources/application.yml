@@ -71,9 +71,40 @@ mybatis:
 
 jwt:
   tokenHeader: Authorization #JWT存储的请求头
-  secret: mySecret #JWT加解密使用的密钥
-  expiration: 604800 #JWT的超期限时间(60*60*24)
+  secret: mySecret #JWT加解密使用的密钥（HS512兼容模式）
+  expiration: 604800 #JWT的超期限时间(60*60*24*7)
   tokenHead: Bearer  #JWT负载中拿到开头
+  
+  # 签名算法配置
+  signature:
+    algorithm: RS256  # 主算法：RS256/HS512
+    fallbackAlgorithms:  # 兼容算法列表
+      - HS512
+  
+  # 密钥配置
+  key:
+    mode: file  # 密钥模式：file/vault/kms
+    rsaPrivateKeyPath: /data/workspace/HIS/config/keys/jwt-private.pem
+    rsaPublicKeyPath: /data/workspace/HIS/config/keys/jwt-public.pem
+    currentKeyVersion: v1  # 当前密钥版本
+  
+  # 黑名单配置
+  blacklist:
+    enabled: true
+    redisKeyPrefix: jwt:blacklist:
+  
+  # 安全增强配置
+  security:
+    deviceBinding:
+      enabled: false
+      mode: loose  # loose/strict
+    ipValidation:
+      enabled: false
+      mode: disabled  # disabled/loose/strict
+    anomalyDetection:
+      enabled: false
+      maxRequestsPerMinute: 100
+      maxConcurrentSessions: 3
 
 
 logging:

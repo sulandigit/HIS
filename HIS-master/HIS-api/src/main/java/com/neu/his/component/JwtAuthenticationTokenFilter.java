@@ -1,5 +1,6 @@
 package com.neu.his.component;
 
+import com.neu.his.common.service.TokenBlacklistService;
 import com.neu.his.common.util.JwtTokenUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,16 +20,27 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 /**
- * JWT登录授权过滤器
+ * JWT登录授权过滤器（增强版）
+ * 新增功能：
+ * 1. 黑名单检查
+ * 2. 设备绑定验证
+ * 3. IP地址验证
  */
 public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
     private static final Logger LOGGER = LoggerFactory.getLogger(JwtAuthenticationTokenFilter.class);
+    
     @Autowired
     private UserDetailsService userDetailsService;
+    
     @Autowired
     private JwtTokenUtil jwtTokenUtil;
+    
+    @Autowired(required = false)
+    private TokenBlacklistService tokenBlacklistService;
+    
     @Value("${jwt.tokenHeader}")
     private String tokenHeader;
+    
     @Value("${jwt.tokenHead}")
     private String tokenHead;
 
@@ -41,10 +53,21 @@ public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
             String authToken = authHeader.substring(this.tokenHead.length());// The part after "Bearer "
             String username = jwtTokenUtil.getUserNameFromToken(authToken);
             LOGGER.info("checking username:{}", username);
+            
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                // 检查黑名单
+                String jti = jwtTokenUtil.getJtiFromToken(authToken);
+                if (tokenBlacklistService != null && jti != null && tokenBlacklistService.isBlacklisted(jti)) {
+                    LOGGER.warn("Token已被加入黑名单 - username: {}, jti: {}", username, jti);
+                    chain.doFilter(request, response);
+                    return;
+                }
+                
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
-                if (jwtTokenUtil.validateToken(authToken, userDetails)) {
-                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                // 使用增强版验证，传入request以支持设备和IP验证
+                if (jwtTokenUtil.validateToken(authToken, userDetails, request)) {
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     LOGGER.info("authenticated user:{}", username);
                     SecurityContextHolder.getContext().setAuthentication(authentication);
