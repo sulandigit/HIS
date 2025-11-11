@@ -10,7 +10,6 @@ import com.neu.his.mbg.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.util.*;
 
@@ -240,7 +239,13 @@ public class DmsDrugStoreServiceImpl implements DmsDrugStoreService {
     }
 
 
+    /**
+     * 发药
+     * 超时设置：20秒
+     * 回滚策略：任何异常均回滚
+     */
     @Override
+    @Transactional(timeout = 20, rollbackFor = Exception.class)
     public int releaseDrug(Long prescriptionId,Integer type){
         //根据处方id判断处方状态为2修改为3
         int count = 0;
@@ -281,7 +286,13 @@ public class DmsDrugStoreServiceImpl implements DmsDrugStoreService {
         return count;
     }
 
+    /**
+     * 退药
+     * 超时设置：30秒
+     * 回滚策略：任何异常均回滚
+     */
     @Override
+    @Transactional(timeout = 30, rollbackFor = Exception.class)
     public int refundDrug(DmsRefundDrugListParam dmsRefundDrugListParam) {
         int count = 0;
 

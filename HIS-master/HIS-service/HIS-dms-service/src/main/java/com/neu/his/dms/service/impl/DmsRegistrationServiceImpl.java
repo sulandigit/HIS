@@ -12,6 +12,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.support.collections.DefaultRedisList;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -45,6 +46,7 @@ public class DmsRegistrationServiceImpl implements DmsRegistrationService {
     //5. 通过门诊号和最近时间返回账单id
     //6.插入发票记录
     @Override
+    @Transactional(timeout = 30, rollbackFor = Exception.class)
     public int createRegistration(DmsRegistrationParam dmsRegistrationParam) {
         PmsPatientExample example = new PmsPatientExample();
         example.createCriteria().andIdentificationNoEqualTo(dmsRegistrationParam.getIdentificationNo());
@@ -186,6 +188,7 @@ public class DmsRegistrationServiceImpl implements DmsRegistrationService {
     //先根据skd_id判断remain是否>0，如果大于0，则向dms_registration插入信息，并且绑定医生（skd_id、bind_status=1）,并修改sms_skd中的排班限额（-1），否则挂号失败
     //向bms_bills_record中插入账单记录
     @Override
+    @Transactional(timeout = 30, rollbackFor = Exception.class)
     public int appRegistration(AppRegistrationParam appRegistrationParam){
         PmsPatient patient = pmsPatientMapper.selectByPrimaryKey(appRegistrationParam.getPatientId());
         if(patient == null){
